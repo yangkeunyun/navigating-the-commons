@@ -5,19 +5,9 @@ df_tmp = copy(df)
 rename!(df_tmp, :omega=>:ω)
 dropmissing!(df_tmp, :ω)
 ω_min = percentile(df_tmp.ω,4); ω_max = percentile(df_tmp.ω,99)
-#ω_min = percentile(exp.(df_tmp.ω),.5); ω_max = percentile(exp.(df_tmp.ω),99.5)
-#ω_min = minimum(df_tmp.ω); ω_max = maximum(df_tmp.ω)
-#density(df_tmp.ω)
 ω_width = (ω_max - ω_min)/(m.Ω_size - 1)
 ω_space = collect(LinRange(ω_min,ω_max,m.Ω_size))
 Ω_df = DataFrame(Ω=ω_space, Ω_index=collect(1:m.Ω_size))
-
-#df_tmp.Ω_index = 1
-#for p = 1:m.Ω_size-2
-#    df_tmp.Ω_index[ω_space[p] .≤ df_tmp.ω .< ω_space[p+1]] .= p+1
-#end
-#df_tmp.Ω_index[ω_space[14] .≤ df_tmp.ω] .= 15
-#density(df_tmp.Ω_index)
 
 Ω_df.Ω = exp.(Ω_df.Ω)
 
@@ -25,14 +15,11 @@ dropmissing!(df_tmp, :ω)
 df_tmp.Ω = exp.(df_tmp.ω)
 df_tmp.Ω_index = findnearest(Ω_df.Ω, df_tmp.Ω)
 ω_df = copy(df_tmp)#density(df.Ω_index) #freqtable(df.Ω_index)
-#df.Ω_index = levelcode.(cut(df.Ω_index, m.Ω_size))
-#density(dropmissing(df, [:Ω_index]).Ω_index)
 ω_transition_df = combine(groupby(ω_df, :fid), :Ω_index => Base.Fix2(lead, 1) => :Ω′_index)
 ω_transition_df.Ω_index = ω_df.Ω_index
 ω_transition_df2 = combine(groupby(ω_df, :fid), :ω => Base.Fix2(lead, 1) => :ω′)
 ω_transition_df.ω = ω_df.ω
 ω_transition_df.ω′ = ω_transition_df2.ω′
-#ω_transition_df = CSV.read(path*raw"/Data/Intermediate/omega_transition.csv", DataFrame) 
 dropmissing!(ω_transition_df, [:Ω_index, :Ω′_index])
 
 ω_transition_df = transform(groupby(ω_transition_df, [:Ω_index, :Ω′_index]), nrow => :cat_countmar) # get the number of occurrences for each transition
@@ -45,7 +32,6 @@ reshape_trans = unstack(trans,:Ω′_index,:prob)
 sort!(reshape_trans, :Ω_index)
 # Transform into a matrix format
 reshape_trans = coalesce.(reshape_trans, 0.0)
-#ω_trans = convert(Matrix{Float64},reshape_trans[:,2:end]) # Finally, convert the dataframe to a matrix
 ω_trans = Tables.matrix(reshape_trans[:,2:end])
 
 function generate_smoothed_transition_matrix(data_matrix, smoothing_factor)
@@ -72,24 +58,6 @@ end
 # Using Laplace smoothing with a smoothing factor of 0.1
 smoothing_factor = 0.05
 ω_trans = generate_smoothed_transition_matrix(ω_trans, smoothing_factor)
-
-#VMat[d.game_start - d.t0 + 2,:]
-#=
-ω_lag = combine(groupby(df, :fid), :omega => Base.Fix2(lag, 1) => :L1omega)
-df_tmp2 = hcat(df, ω_lag, makeunique=true)
-dropmissing(df_tmp2, :fid)
-reg_omega = reg(df_tmp2, @formula(omega ~ L1omega))
-#reg_omega = reg(df_tmp2, @formula(omega ~ L1omega + fe(fid)))
-θ_λ = coef(reg_omega)[2]
-
-μ = mean(df_tmp.ω)
-σ² = (std(df_tmp.ω))^2
-znum = m.Ω_size
-zdev = 3
-
-ω_trans = tauchen(μ,σ²,θ_λ,znum,zdev)[2]
-=#
-#sum(ω_trans,dims=1)
 
 using Statistics
 # Capacity space

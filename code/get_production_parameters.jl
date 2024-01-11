@@ -1,6 +1,6 @@
 #= Production parameters obtained from static production function estimation =#
 println("Production parameters")
-PF_estimates = CSV.read(path*raw"/Data/Intermediate/PF_CD.csv", DataFrame)
+PF_estimates = CSV.read(path*raw"/data/PF_CD.csv", DataFrame)
 
 if m.state_space == "KAΩ"                
     βₖ = PF_estimates[PF_estimates.var.=="bk",:][!,2][1]
@@ -18,7 +18,3 @@ else
     β₀ = PF_estimates[PF_estimates.var.=="c",:][!,2][1]
     λ = PF_estimates[PF_estimates.var.=="rho",:][!,2][1]
 end
-PF_estimates = CSV.read(path*raw"/Data/Intermediate/PF_CD_no_strategic_interaction.csv", DataFrame)
-βₖ_NSI = PF_estimates[PF_estimates.var.=="k",:][!,2][1]
-βᵗ_NSI = PF_estimates[PF_estimates.var.=="t",:][!,2][1]
-β₀_NSI = PF_estimates[PF_estimates.var.=="_cons",:][!,2][1]

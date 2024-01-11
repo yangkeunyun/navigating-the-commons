@@ -415,15 +415,6 @@ function solve_NOE(d, m)
     return χMat1, ιMat1, λVec1, NVec, KVec, QVec, WVec, PVec
 end
 
-#=
-describe(timevar)
-tmp = [timevar[timevar .≤ 34] state[timevar .≤ 34] x.K_index[state[timevar .≤ 34]] decision[timevar .≤ 34]]
-tmp_df = copy(df)
-tmp_df.Kprime = exp.(tmp_df.kprime)
-dropmissing!(tmp_df, :omega)
-tmp_df = tmp_df[1831 .≤ tmp_df.tid .≤ 1837,[:fid, :fname, :A, :omega, :K, :Kprime, :exit]]
-=#
-
 function calc_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m)
 
     exit_prob, invest_prob, entry_prob = solve_NOE(d, m)[1:3]

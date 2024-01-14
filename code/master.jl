@@ -17,19 +17,24 @@ include(path*raw"/code/3_model_simulation.jl")
 
 println("Set data and model parameters")
 
-m = DG_model(;  β=[], F="CD", 
-                α=[],
-                ρ=.9, xᵉ=1, δ=0.0, 
-                ψ=1.0, Γ=[0.0;0.0], ϕ=0.0, κ=0.0, ϕᶠ=0.0,
-                K_size=300, A_size=15, Ω_size=15, x_size=0,
-                obj_incumbents_pre=0,obj_incumbents_post=0,
-                scale_Q=100, scale_P=1000,
-                N̄=400,
-                nboot=100,
-                state_space="KΩ")
+m = DG_model(;  β=[],                                       # production function paratmeters
+                F="CD",                                     # functional form of production function. e.g. `CD` is Cobb-Douglas
+                α=[],                                       # demand curve parameters
+                ρ=.9,                                       # time discounting factor
+                xᵉ=1, δ=0.0,                                # ignore for now..
+                ψ=1.0, Γ=[0.0;0.0], ϕ=0.0, κ=0.0, ϕᶠ=0.0,   # initial parameters. But need to be fixed later
+                K_size=300,                                 # `K_size` refers to the incremental increase of capacity (fleet size). e.g. 300 means that the capacity space is [100, 400, 700, 1000, .....]. Maybe `K_width` is more appropriate naming. Let's fix later.
+                A_size=15,                                  # `A_size` refers to the size of firm age space. It might be used later, but ignore for now.
+                Ω_size=15,                                  # `Ω_size` refers to the size of productivity space. e.g. The total number of productivity grids is 15.
+                x_size=0,                                   # `x_size` refers to the size of state space, as a combination of all state variables. The actual number will be allocated in the later part of the code.
+                obj_incumbents_pre=0,obj_incumbents_post=0, # ignore for now..
+                scale_Q=100, scale_P=1000,                  # scaling to avoid explosion in exponentials...
+                N̄=400,                                      # maxmimum number of incumbents that the industry can accomodate
+                nboot=100,                                  # ignore for now...
+                state_space="KΩ")                           # state space is consisted of capacity and productivity
 
-d = DG_data(; t0=1804, t1=1920, 
-                game_start=1858, game_end=1920,
+d = DG_data(; t0=1804, t1=1920,                             # initial year and last year
+                game_start=1858, game_end=1920,             # need to be fixed... for now, they are anyway defined in the later part of the code
                 sMat=[], PVec=[], WVec=[], KVec=[], QVec=[], NVec=[], S=[], Q=[], πMat=[], VMat=[],
                 ιMat0=[],χMat0=[],λVec0=[],ιMat1=[],χMat1=[],λVec1=[],Π=[])
 

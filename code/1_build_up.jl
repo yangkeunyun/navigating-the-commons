@@ -6,7 +6,10 @@ function findnearest(A::AbstractArray,values)
     return index
 end
 
-function prepare_state_transition(m)
+function prepare_state_transition(
+    m::DG_model,
+    ω_trans::Matrix{Float64}
+    )::Tuple{Array{Int64,1},Array{Int64,1},Array{Float64,1}}
     if m.state_space == "KAΩ"
         Is_Π = repeat(collect(1:m.x_size),inner=m.K_size*m.Ω_size)
         Π_base = repeat(ω_trans[1,:],outer=m.K_size)'
@@ -59,10 +62,17 @@ function resample_data(df, d)
     return data_boot
 end
 
-function build_data(df, d, m)
+function build_data(
+    df::DataFrame,
+    d::DG_data,
+    m::DG_model,
+    K_df::DataFrame,
+    A_df::DataFrame,
+    Ω_df::DataFrame,
+    sMat_data::Matrix{Float64}
+    )::Tuple{Vector{Int64}, Vector{Int64}, Vector{Int64}, Vector{Int64}, Vector{Int64}, Matrix{Float64}}
+
     df_tmp = copy(df)
-    rename!(df_tmp, :omega=>:ω)
-    dropmissing!(df_tmp, :ω)
     df_tmp.time = df_tmp.tid .- d.t0 .+ 1 
     df_tmp = df_tmp[d.game_start .≤ df_tmp.tid .≤ d.game_end, :]
 
@@ -86,8 +96,6 @@ function build_data(df, d, m)
 
     # Number of entry from data
     df_tmp = copy(df)
-    rename!(df_tmp, :omega=>:ω)
-    dropmissing!(df_tmp, :ω)
     df_tmp.time = df_tmp.tid .- d.t0 .+ 1 
     df_tmp_K = df_tmp[d.game_start+1 .≤ df_tmp.tid .≤ d.game_end+1 .&& df_tmp.A .== 1, [:time, :K]]
     sort!(df_tmp_K, [:time, :K])
@@ -103,6 +111,7 @@ function build_data(df, d, m)
     rename!(n_entrants, :K => :entrants)
     decision_pe_quit = Nᵖᵉ .- n_entrants.entrants
 
+    println(typeof.([timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit]))
     return timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit
 end
 

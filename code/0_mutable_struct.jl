@@ -14,36 +14,7 @@ end
 @warn("Packages installed!")
 =#
 # Additional packages
-using Pkg
 
-using CSV, DataFrames, DelimitedFiles   # loading data
-using FixedEffectModels # create lagged variables in DataFrame
-using LinearAlgebra     # basic math
-using Plots             # draw plots
-using Optim # minimization of functions
-using Random            # generate random numbers
-using Parameters        # decorates a type definition to allow default values and a keyword constructor
-using StatsBase
-using SplitApplyCombine # split string variables into multiple columns
-using GLM
-using Impute
-using StatsPlots
-using Binscatters
-using Combinatorics
-using SparseArrays
-using TickTock
-using Kronecker
-using Distributions
-using CategoricalArrays # find quantiles
-using Distances
-using BenchmarkTools
-using DataStructures
-using Distributed
-using SpecialFunctions
-using Base.Threads
-using Measures
-using ColorSchemes
-using ForwardDiff
 #using Optimization, OptimizationOptimJL, ForwardDiff # In Linux server, I had trouble with installing 'OptimizationOptimJL'. So I did using Pkg
                                                      #                                                                                Pkg.activate("my_project")
                                                      #                                                                                Pkg.add("OptimizationOptimJL")

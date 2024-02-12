@@ -1,10 +1,11 @@
 
-function calc_transition_productivity(capacity_prime, m)
+function calc_transition_productivity(capacity_prime, m, Is, Xs)
     #capacity_prime = capacity_prime_cond
     #= Compute transition probabilities =#
     Js = zeros(Int, m.x_size*m.Ω_size)
     if m.state_space == "KAΩ"
         Threads.@threads for l = 1:m.x_size
+        # for l = 1:m.x_size
             A_ind = unique(A[Is[1+(l-1)*m.Ω_size:l*m.Ω_size]])[1]
             if A_ind == m.A_size 
                 A_ind -= 1 # A_size is absorbing state
@@ -13,6 +14,7 @@ function calc_transition_productivity(capacity_prime, m)
         end
     elseif m.state_space == "KΩ"
         Threads.@threads for l = 1:m.x_size
+        # for l = 1:m.x_size
             Js[1+(l-1)*m.Ω_size:l*m.Ω_size] = collect(1:m.Ω_size)' .+ m.Ω_size*(capacity_prime[l] - 1)
         end    
     end
@@ -21,10 +23,11 @@ function calc_transition_productivity(capacity_prime, m)
 end
 
 
-function calc_transition_matrix!(Π, ιMat1, m, t)
+function calc_transition_matrix!(Π, ιMat1, m, t, Xs_Π, Is_Π, Js_Π)
     Xs_Π_update = zeros(eltype(m.Γ),size(Xs_Π,1))
     if m.state_space == "KAΩ"
         Threads.@threads for l = 1:m.x_size
+        # for l = 1:m.x_size
             A_ind = unique(A[Is[1+(l-1)*m.Ω_size:l*m.Ω_size]])[1]
             if A_ind == m.A_size 
                 A_ind -= 1 # A_size is absorbing state
@@ -36,6 +39,7 @@ function calc_transition_matrix!(Π, ιMat1, m, t)
         end
     elseif m.state_space == "KΩ"
         Threads.@threads for l = 1:m.x_size
+        # for l = 1:m.x_size
             for k = 1:m.K_size
                 Xs_Π_update[1+(l-1)*m.Ω_size*m.K_size+(k-1)*m.Ω_size:(l-1)*m.Ω_size*m.K_size+(k)*m.Ω_size] = 
                     Xs_Π[1+(l-1)*m.Ω_size*m.K_size+(k-1)*m.Ω_size:(l-1)*m.Ω_size*m.K_size+(k)*m.Ω_size]*ιMat1[t,l,k]
@@ -92,7 +96,7 @@ function compute_aggregate_state!(
     df::DataFrame
 )
 
-    @unpack QData, KData, NData, WData, W₀, W_post, Pop, GDP, Pet, Post1859, PData, r_max, z = agg_variables
+    @unpack QData, KData, NData, WData, W₀, W_post, Pop, GDP, Pet, Post1859, PData, r_max, z, WMin = agg_variables
     
     @unpack αᵖ, αᵖᵒᵖ, αᵍᵈᵖ, αᵗ, α₀ = demand_parameters_pre
     αᵖ_pre, αᵖᵒᵖ_pre, αᵍᵈᵖ_pre, αᵗ_pre, α₀_pre = αᵖ, αᵖᵒᵖ, αᵍᵈᵖ, αᵗ, α₀
@@ -291,10 +295,10 @@ function calc_cost_ent(ι, m)
 end
 
         
-function compute_distribution!(sMat, ιMat1, λVec1, d, m)
+function compute_distribution!(sMat, ιMat1, λVec1, d, m, Xs_Π, Is_Π, Js_Π, Π_ent)
     Π = spzeros(eltype(m.Γ),m.x_size, m.x_size)
     for t = (d.game_start - d.t0 + 1):(d.game_end - d.t0 + 6)
-        calc_transition_matrix!(Π, ιMat1,m,t)
+        calc_transition_matrix!(Π, ιMat1,m,t, Xs_Π, Is_Π, Js_Π)
         sMat[t+1,:] .= Π'sMat[t,:]
         Nᵖᵉ = max.(m.N̄ - sum(sMat[t,:]),0)
         tmp_ent = repeat(λVec1[t,:], inner=m.Ω_size)
@@ -306,17 +310,37 @@ end
 
 
 # 0.002739 seconds (26.27 k allocations: 14.199 MiB)
-function get_EV_CCP_inc(period_profit, V, m, K_space, K)
+# function get_EV_CCP_inc(
+#     period_profit::Array{Float64, 1},
+#     V::Array{Float64, 2},
+#     m::DG_model,
+#     K_space::Vector{Float64},
+#     K::Vector{Float64},
+#     )::Tuple{Array{Float64, 2}, Array{Float64, 2}, Array{Float64, 2}
+#     }
+function get_EV_CCP_inc(
+    period_profit::Vector{Float64},
+    V::Vector{Float64},
+    m::DG_model,
+    K_space::Vector{Float64},
+    K::Vector{Float64},
+    Is::Vector{Int64},
+    Xs::Vector{Float64}
+    )::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}}
     #V = VMat[t+1,:] # for test
     #period_profit = πMat[t,:]
+    # println(typeof.([period_profit, V, m, K_space, K, Is, Xs]))
+    # throw(ArgumentError("stop"))
+
     soical_surplus_stay = zeros(eltype(m.Γ),m.x_size,m.K_size)
     pr_capacity_prime = zeros(m.x_size,m.K_size)
     EVᵐᵃˣ = zeros(eltype(m.Γ),m.x_size)
     Threads.@threads for j = 1:m.K_size 
+    # for j = 1:m.K_size 
         capacity_prime_cond = j*ones(Int,m.x_size)
         invest_cond = K_space[capacity_prime_cond] - (1-m.δ)*K
         cost = calc_cost(invest_cond, m)
-        Π_cond = calc_transition_productivity(capacity_prime_cond,m) 
+        Π_cond = calc_transition_productivity(capacity_prime_cond,m,Is,Xs)
         soical_surplus_stay[:,j] = -(cost)/(m.scale_P*m.scale_Q) + m.ρ*Π_cond*V 
     end
 
@@ -330,12 +354,13 @@ function get_EV_CCP_inc(period_profit, V, m, K_space, K)
 end
 
 # 0.000508 seconds (666 allocations: 26.969 KiB)
-function get_CCP_ent(V, m)    
+function get_CCP_ent(V, m, K_space, Π_ent)
     #V = VMat[t+1,:] # for test
     soical_surplus_ent = zeros(eltype(m.Γ),1,m.K_size)
     pr_capacity_prime = zeros(1,m.K_size)
     EVᵐᵃˣ = zeros(eltype(m.Γ),m.x_size)
     Threads.@threads for j = 1:m.K_size 
+    # for j = 1:m.K_size 
         invest_cond = K_space[j]
         cost = calc_cost_ent(invest_cond, m)
         soical_surplus_ent[:,j] .= -(cost)/(m.scale_P*m.scale_Q) + m.ρ*Π_ent'*V[1+(j-1)*m.Ω_size:j*m.Ω_size] - (m.κ/(m.scale_P*m.scale_Q))
@@ -366,7 +391,10 @@ function compute_backward!(
     agg_variables::AggregateVariables,
     x::DataFrame,
     K_space::Vector{Float64},
-    K::Vector{Float64}
+    K::Vector{Float64},
+    Is::Vector{Int64},
+    Xs::Vector{Float64},
+    Π_ent::Vector{Float64}
 )
 
     for t = (d.game_end - d.t0 + 6):-1:(d.game_start - d.t0 + 1) #Tbar:-1:(d.game_start - d.t0 + 1)
@@ -383,10 +411,10 @@ function compute_backward!(
         end
 
         # Incumbents' problem
-        VMat[t,:], ιMat1[t,:,:], χMat1[t,:] = get_EV_CCP_inc(πMat[t,:], VMat[t+1,:], m, K_space, K)
+        VMat[t,:], ιMat1[t,:,:], χMat1[t,:] = get_EV_CCP_inc(πMat[t,:], VMat[t+1,:], m, K_space, K, Is, Xs)
 
         # Potential entrants' problem
-        λVec1[t,:] = get_CCP_ent(VMat[t+1,:], m)    
+        λVec1[t,:] = get_CCP_ent(VMat[t+1,:], m, K_space, Π_ent)
     end
     return nothing
 end
@@ -404,9 +432,13 @@ function solve_NOE(
     demand_parameters_post::DemandParameters,
     df::DataFrame,
     n_max::Int64,
-    K_space::Vector{Float64}
+    K_space::Vector{Float64},
+    Is::Vector{Int64},
+    Xs::Vector{Float64},
+    Π_ent::Vector{Float64},
+    Xs_Π, Is_Π, Js_Π
 )
-    @unpack QData, KData, NData, WData, W₀, W_post, Pop, GDP, Pet, Post1859, PData, r_max, z = agg_variables
+    @unpack QData, KData, NData, WData, W₀, W_post, Pop, GDP, Pet, Post1859, PData, r_max, z, WMin = agg_variables
     if m.cost_struct == 1 || m.cost_struct == 10
         println("\nParameters: ψ = $(m.ψ), κ = $(m.κ), ϕ = $(m.ϕ), ϕᶠ = $(m.ϕᶠ), γ⁺₁ = $(m.Γ[1]), γ⁺₂ = $(m.Γ[2]), γ⁻₁ = $(m.Γ[3]), γ⁻₂ = $(m.Γ[4])")
     elseif m.cost_struct == 2 || m.cost_struct == 9 || m.cost_struct == 12
@@ -471,11 +503,11 @@ function solve_NOE(
             sMat[1:end-1,:] = sMat_data
             compute_aggregate_state!(NVec, KVec, QVec, QᶠVec, WVec, PVec, sMat, Q, d, m, production_parameters, agg_variables, demand_parameters_pre, demand_parameters_post, x, df)
         else 
-            compute_distribution!(sMat, ιMat1, λVec1, d, m)
+            compute_distribution!(sMat, ιMat1, λVec1, d, m, Xs_Π, Is_Π, Js_Π, Π_ent)
             compute_aggregate_state!(NVec, KVec, QVec, QᶠVec, WVec, PVec, sMat, Q, d, m, production_parameters, agg_variables, demand_parameters_pre, demand_parameters_post, x, df)
         end
 
-        compute_backward!(ιMat1, χMat1, λVec1, πMat, VMat, Q, mc, KVec, WVec, PVec, d, m, production_parameters, agg_variables, x, K_space, K)
+        compute_backward!(ιMat1, χMat1, λVec1, πMat, VMat, Q, mc, KVec, WVec, PVec, d, m, production_parameters, agg_variables, x, K_space, K, Is, Xs, Π_ent)
 
         ιMat1 = (ιMat0 + ιMat1)/2
         χMat1 = (χMat0 + χMat1)/2
@@ -523,12 +555,16 @@ function calc_log_likelihood(
     demand_parameters_post::DemandParameters,
     df::DataFrame,
     n_max::Int64,
-    K_space::Vector{Float64}
+    K_space::Vector{Float64},
+    Is::Vector{Int64},
+    Xs::Vector{Float64},
+    Π_ent::Vector{Float64},
+    Xs_Π, Is_Π, Js_Π
 )::Float64
 
     @unpack QData, KData, NData, WData, W₀, W_post, Pop, GDP, Pet, Post1859, PData, r_max, z = agg_variables
 
-    exit_prob, invest_prob, entry_prob = solve_NOE(d, m, Tbar, agg_variables, sMat_data, K,production_parameters, x, demand_parameters_pre, demand_parameters_post, df, n_max, K_space)[1:3]
+    exit_prob, invest_prob, entry_prob = solve_NOE(d, m, Tbar, agg_variables, sMat_data, K,production_parameters, x, demand_parameters_pre, demand_parameters_post, df, n_max, K_space, Is, Xs, Π_ent, Xs_Π, Is_Π, Js_Π)[1:3]
     
     exit_prob[d.game_start-d.t0+1:d.game_end - d.t0+1,:][exit_prob[d.game_start-d.t0+1:d.game_end - d.t0+1,:] .== 0.0] = exit_prob[d.game_start-d.t0+1:d.game_end - d.t0+1,:][exit_prob[d.game_start-d.t0+1:d.game_end - d.t0+1,:] .== 0.0] .+ 1e-25
     invest_prob[d.game_start-d.t0+1:d.game_end - d.t0+1,:,:][invest_prob[d.game_start-d.t0+1:d.game_end - d.t0+1,:,:] .== 0.0] = invest_prob[d.game_start-d.t0+1:d.game_end - d.t0+1,:,:][invest_prob[d.game_start-d.t0+1:d.game_end - d.t0+1,:,:] .== 0.0] .+ 1e-25
@@ -571,7 +607,11 @@ function optimize_log_likelihood(
     df::DataFrame,
     Nᵖᵉ::Int64,
     n_max::Int64,
-    K_space::Vector{Float64}
+    K_space::Vector{Float64},
+    Is::Vector{Int64},
+    Xs::Vector{Float64},
+    Π_ent::Vector{Float64},
+    Xs_Π, Is_Π, Js_Π
 )
 
     @unpack QData, KData, NData, WData, W₀, W_post, Pop, GDP, Pet, Post1859, PData, r_max, z = agg_variables
@@ -588,7 +628,7 @@ function optimize_log_likelihood(
             m.ψ = θ[1]; m.κ = θ[2]; m.ϕᶠ = θ[3]; m.Γ = θ[4:end]
         end
 
-        pll = @time calc_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, K, production_parameters, x, demand_parameters_pre, demand_parameters_post, df, n_max, K_space)
+        pll = @time calc_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, K, production_parameters, x, demand_parameters_pre, demand_parameters_post, df, n_max, K_space, Is, Xs, Π_ent, Xs_Π, Is_Π, Js_Π)
         if m.state_space == "KAΩ"                
             println("The dimension of state space is $(m.K_size*m.A_size*m.Ω_size)")
         elseif m.state_space == "KΩ"
@@ -653,7 +693,7 @@ function calc_std_errors(θ, d, m)
             m.ψ = θ[1]; m.κ = θ[2]; m.ϕᶠ = θ[3]; m.Γ = θ[4:end]
         end
         
-        ll = calc_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, K, production_parameters, x, demand_parameters_pre, demand_parameters_post, df, n_max, K_space)
+        ll = calc_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, K, production_parameters, x, demand_parameters_pre, demand_parameters_post, df, n_max, K_space, Is, Xs, Π_ent)
         return ll
     end
 

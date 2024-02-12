@@ -162,3 +162,43 @@ end
 end  
 
 
+
+#= Production parameters obtained from static production function estimation =#
+
+struct ProductionParameters
+    βₖ::Float64
+    βₐ::Float64
+    βᵏ::Float64
+    βʷ::Float64
+    βᵗ::Float64
+    β₀::Float64
+    λ::Float64
+end
+
+
+struct AggregateVariables
+    QData::Vector{Float64}
+    KData::Vector{Float64}
+    NData::Vector{Int64}
+    WData::Vector{Float64}
+    W₀::Vector{Float64}
+    W_post::Vector{Float64}
+    Pop::Vector{Int64}
+    GDP::Vector{Int64}
+    Pet::Vector{Float64}
+    Post1859::Vector{Float64}
+    PData::Vector{Float64}
+    r_max::Float64
+    z::Float64
+    WMin::Float64
+end
+
+
+mutable struct DemandParameters
+    αᵖ::Float64
+    αᵖᵒᵖ::Float64
+    αᵍᵈᵖ::Float64
+    αᵗ::Float64
+    αᵖᵉᵗ::Float64
+    α₀::Float64
+end

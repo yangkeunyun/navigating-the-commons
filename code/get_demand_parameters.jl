@@ -1,11 +1,4 @@
-mutable struct DemandParameters
-    αᵖ::Float64
-    αᵖᵒᵖ::Float64
-    αᵍᵈᵖ::Float64
-    αᵗ::Float64
-    αᵖᵉᵗ::Float64
-    α₀::Float64
-end
+
 
 function get_demand_parameters(dm_estimates::DataFrame)
     αᵖ = dm_estimates[dm_estimates.var.=="ln_price_whale_catchval_cpi",:][!,2][1]

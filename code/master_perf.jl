@@ -1,5 +1,5 @@
 
-using BenchmarkTools, Revise, CSV, DataFrames, DataFramesMeta
+using BenchmarkTools, Revise, CSV, DataFrames, DataFramesMeta, Parameters
 
 # Set the working directory
 if Sys.iswindows()
@@ -15,10 +15,10 @@ println("The number of threads is $(Threads.nthreads())")
 
 # Load function call
 string(@__DIR__) in LOAD_PATH || push!(LOAD_PATH, @__DIR__);
-using Whale;
-const W = Whale;
+using WhalesModule;
+const M = WhalesModule;
 
-m = W.DG_model(;  β=[],                                       # production function paratmeters
+m = M.DG_model(;  β=[],                                       # production function paratmeters
                 F="CD",                                     # functional form of production function. e.g. `CD` is Cobb-Douglas
                 α=[],                                       # demand curve parameters
                 ρ=.9,                                       # time discounting factor
@@ -34,7 +34,7 @@ m = W.DG_model(;  β=[],                                       # production func
                 nboot=100,                                  # ignore for now...
                 state_space="KΩ")                           # state space is consisted of capacity and productivity
 
-d = W.DG_data(; t0=1804, t1=1920,                             # initial year and last year
+d = M.DG_data(; t0=1804, t1=1920,                             # initial year and last year
                 game_start=1858, game_end=1920,             # need to be fixed... for now, they are anyway defined in the later part of the code
                 sMat=[], PVec=[], WVec=[], KVec=[], QVec=[], NVec=[], S=[], Q=[], πMat=[], VMat=[],
                 ιMat0=[],χMat0=[],λVec0=[],ιMat1=[],χMat1=[],λVec1=[],Π=[])
@@ -53,16 +53,16 @@ dropmissing!(df, :ω)
 
 # Get static parameters
 PF_estimates = CSV.read(path*raw"/data/PF_CD.csv", DataFrame)
-production_parameters = W.get_production_parameters(m.state_space, PF_estimates)
+production_parameters = M.get_production_parameters(m.state_space, PF_estimates)
 
 dm_estimates_pre = CSV.read(path*raw"/data/demand_curve_pre.csv", DataFrame)
 dm_estimates_post = CSV.read(path*raw"/data/demand_curve_post.csv", DataFrame)
-demand_parameters_pre = W.get_demand_parameters(dm_estimates_pre)
-demand_parameters_post = W.get_demand_parameters(dm_estimates_post)
+demand_parameters_pre = M.get_demand_parameters(dm_estimates_pre)
+demand_parameters_post = M.get_demand_parameters(dm_estimates_post)
 demand_parameters_post.αᵖ = demand_parameters_pre.αᵖ
 
 # Construct state space
-x, Ω_df, K_df, A_df, ω_trans = W.get_state_space!(m, df)
+x, Ω_df, K_df, A_df, ω_trans = M.get_state_space!(m, df)
 
 if m.state_space == "KAΩ"                
     println("The dimension of state space is $(m.K_size*m.A_size*m.Ω_size) with $(m.K_size) grid for K, $(m.A_size) grid for A, and $(m.Ω_size) grid for Ω")
@@ -83,14 +83,14 @@ petroleum = CSV.read(path*raw"/data/petroleum_price.csv", DataFrame)[:,[:year,:p
 rename!(petroleum, :petroleum_price_ma => :petroleum_price)
 petroleum = [DataFrame(year=collect(d.t0:d.tP-1), petroleum_price=ones(d.tP-d.t0)); petroleum]
 
-agg_variables = W.get_aggregate_variables(agg_output, agg_capacity, agg_incumbents, pop_df, usgdp_df, whale_prices, petroleum, d, Tbar)
+agg_variables = M.get_aggregate_variables(agg_output, agg_capacity, agg_incumbents, pop_df, usgdp_df, whale_prices, petroleum, d, Tbar)
 
 
 # Get initial guess of expected industry state in each period directly from data
-sMat_data = W.get_initial_expected_industry_state!(df, m.state_space, x, Ω_df, K_df, A_df, d)
+sMat_data = M.get_initial_expected_industry_state!(df, m.state_space, x, Ω_df, K_df, A_df, d)
 
 # Get entrants' intial state
-xᵉ, Π_ent, Kᵉˣ, Ωᵉˣ = W.get_entrants_state(df, x, Ω_df, K_df, m.state_space)
+xᵉ, Π_ent, Kᵉˣ, Ωᵉˣ = M.get_entrants_state(df, x, Ω_df, K_df, m.state_space)
 
 
 
@@ -104,7 +104,7 @@ elseif m.state_space == "KΩ"
 end
 
 #Is_Π, Js_Π = prepare_state_transition(m)
-Is_Π, Js_Π, Xs_Π = W.prepare_state_transition(m, ω_trans)
+Is_Π, Js_Π, Xs_Π = M.prepare_state_transition(m, ω_trans)
 
 m.options.ζ₁ = 2/3; m.options.Ζ₁ = 1.0
 m.options.ζ₂ = 2/3; m.options.Ζ₂ = 1.0
@@ -137,59 +137,85 @@ println("Estimate logit scale parameter? $(m.scale_est)")
 m.post = 0
 d.game_start = 1831 
 d.game_end = 1858
-timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit = W.build_data(df, d, m, K_df, A_df, Ω_df, sMat_data)
+timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit = M.build_data(df, d, m, K_df, A_df, Ω_df, sMat_data)
 
 K_space = K_df.K
 
 #========================================================================================#
 
-# @time W.solve_NOE(d, m)
+# @time M.solve_NOE(d, m)
 
-@time nfxp_golden_age = W.optimize_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, x, production_parameters, demand_parameters_pre, demand_parameters_post, df, Nᵖᵉ, n_max, K_space)
+@unpack QData, KData, NData, WData, W₀, W_post, Pop, GDP, Pet, Post1859, PData, r_max, z = agg_variables
+K = x.K
+Ω = x.Ω
+if "A" ∈ names(x)
+    A = x.A
+end
 
-
-
-
-
-#========================================================================================#
-# within while loop
-#========================================================================================#
-λVec0 = ones(eltype(m.κ),Tbar + 1,m.K_size); λVec0[end] = 0            
-#d.ιMat0 = ones(Tbar+1,m.x_size,5)
-ιMat0 = ones(eltype(m.κ),Tbar+1,m.x_size,m.K_size)
-χMat0 = ones(eltype(m.κ),Tbar+1,m.x_size)
-λVec1 = ones(eltype(m.κ),Tbar+1,m.K_size); λVec1[end] = 0
-#d.ιMat1 = ones(Tbar+1,m.x_size,5)
-ιMat1 = ones(eltype(m.κ),Tbar+1,m.x_size,m.K_size)
-χMat1 = ones(eltype(m.κ),Tbar+1,m.x_size)
-
-# Initial matrices (period-by-state) and vectors (by period)
-sMat = zeros(eltype(m.κ),Tbar+1,m.x_size)   # industry state, i.e. the number of firms in each possible state
-PVec = zeros(eltype(m.κ),Tbar+1)            # price vector
-WVec = zeros(eltype(m.κ),Tbar+1)            # whale population in each period
-KVec = zeros(eltype(m.κ),Tbar+1)            # aggregate capacity in each period
-QVec = zeros(eltype(m.κ),Tbar+1)            # aggregate whale catch in each period
-QᶠVec = zeros(eltype(m.κ),Tbar+1)           # aggregate whale catch outside of US whaling
-NVec = zeros(eltype(m.κ),Tbar+1)            # aggregate number of incumbents in each period
-VMat = zeros(eltype(m.κ),Tbar+1,m.x_size)
-πMat = zeros(eltype(m.κ),Tbar+1,m.x_size)
-Q = zeros(eltype(m.κ),m.x_size)
-mc = zeros(eltype(m.κ),m.x_size)
-
-WVec[[1]] = W₀
-sMat[1,:] = sMat_data[1,:]
-NVec[[1]] .= max(sum(sMat[1,:]),1)
-KVec[[1]] .= sum(K .* sMat[1,:])
-calc_production!(Q, KVec, WVec, d, 1)
-QVec[[1]] .= sum(Q.*sMat[1,:])
-sMat[1:end-1,:] = sMat_data
-compute_aggregate_state!(NVec, KVec, QVec, QᶠVec, WVec, PVec, sMat, Q, d, m)
-
-n = 0
-Δ = 10; Δ₁ = 10; Δ₂ = 10; Δ₃ = 10; 
+if m.scale_est == "No"
+    m.κ = θ[1]; m.ϕᶠ = θ[2]; m.Γ = θ[3:end]
+else
+    m.ψ = θ[1]; m.κ = θ[2]; m.ϕᶠ = θ[3]; m.Γ = θ[4:end]
+end
 
 
-sMat[1:end-1,:] = sMat_data
-@time compute_aggregate_state!(NVec, KVec, QVec, QᶠVec, WVec, PVec, sMat, Q, d, m)
+θ₀ = reduce(vcat,[κ,ϕᶠ,Γ])
+@time M.obj_func(θ₀)
 
-@time compute_backward!(ιMat1, χMat1, λVec1, πMat, VMat, Q, mc, KVec, WVec, PVec, d, m)
+pll = @time M.calc_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, K, production_parameters, x, demand_parameters_pre, demand_parameters_post, df, n_max, K_space, Is, Xs, Π_ent, Xs_Π, Is_Π, Js_Π)
+
+
+# @time M.calc_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, K, production_parameters, x, demand_parameters_pre, demand_parameters_post, df, n_max, K_space, Is, Xs, Π_ent, Xs_Π, Is_Π, Js_Π)
+
+
+
+
+
+@time nfxp_golden_age = M.optimize_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, x, production_parameters, demand_parameters_pre, demand_parameters_post, df, Nᵖᵉ, n_max, K_space, Is, Xs, Π_ent, Xs_Π, Is_Π, Js_Π)
+
+
+
+
+
+# #========================================================================================#
+# # within while loop
+# #========================================================================================#
+# λVec0 = ones(eltype(m.κ),Tbar + 1,m.K_size); λVec0[end] = 0            
+# #d.ιMat0 = ones(Tbar+1,m.x_size,5)
+# ιMat0 = ones(eltype(m.κ),Tbar+1,m.x_size,m.K_size)
+# χMat0 = ones(eltype(m.κ),Tbar+1,m.x_size)
+# λVec1 = ones(eltype(m.κ),Tbar+1,m.K_size); λVec1[end] = 0
+# #d.ιMat1 = ones(Tbar+1,m.x_size,5)
+# ιMat1 = ones(eltype(m.κ),Tbar+1,m.x_size,m.K_size)
+# χMat1 = ones(eltype(m.κ),Tbar+1,m.x_size)
+
+# # Initial matrices (period-by-state) and vectors (by period)
+# sMat = zeros(eltype(m.κ),Tbar+1,m.x_size)   # industry state, i.e. the number of firms in each possible state
+# PVec = zeros(eltype(m.κ),Tbar+1)            # price vector
+# WVec = zeros(eltype(m.κ),Tbar+1)            # whale population in each period
+# KVec = zeros(eltype(m.κ),Tbar+1)            # aggregate capacity in each period
+# QVec = zeros(eltype(m.κ),Tbar+1)            # aggregate whale catch in each period
+# QᶠVec = zeros(eltype(m.κ),Tbar+1)           # aggregate whale catch outside of US whaling
+# NVec = zeros(eltype(m.κ),Tbar+1)            # aggregate number of incumbents in each period
+# VMat = zeros(eltype(m.κ),Tbar+1,m.x_size)
+# πMat = zeros(eltype(m.κ),Tbar+1,m.x_size)
+# Q = zeros(eltype(m.κ),m.x_size)
+# mc = zeros(eltype(m.κ),m.x_size)
+
+# WVec[[1]] = W₀
+# sMat[1,:] = sMat_data[1,:]
+# NVec[[1]] .= max(sum(sMat[1,:]),1)
+# KVec[[1]] .= sum(K .* sMat[1,:])
+# calc_production!(Q, KVec, WVec, d, 1)
+# QVec[[1]] .= sum(Q.*sMat[1,:])
+# sMat[1:end-1,:] = sMat_data
+# compute_aggregate_state!(NVec, KVec, QVec, QᶠVec, WVec, PVec, sMat, Q, d, m)
+
+# n = 0
+# Δ = 10; Δ₁ = 10; Δ₂ = 10; Δ₃ = 10; 
+
+
+# sMat[1:end-1,:] = sMat_data
+# @time compute_aggregate_state!(NVec, KVec, QVec, QᶠVec, WVec, PVec, sMat, Q, d, m)
+
+# @time compute_backward!(ιMat1, χMat1, λVec1, πMat, VMat, Q, mc, KVec, WVec, PVec, d, m)

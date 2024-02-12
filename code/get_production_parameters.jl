@@ -1,14 +1,3 @@
-#= Production parameters obtained from static production function estimation =#
-
-struct ProductionParameters
-    βₖ::Float64
-    βₐ::Float64
-    βᵏ::Float64
-    βʷ::Float64
-    βᵗ::Float64
-    β₀::Float64
-    λ::Float64
-end
 
 function get_production_parameters(state_space::String, PF_estimates::DataFrame)
     println("Production parameters")

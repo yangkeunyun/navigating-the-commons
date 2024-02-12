@@ -1,18 +1,3 @@
-struct AggregateVariables
-    QData::Vector{Float64}
-    KData::Vector{Float64}
-    NData::Vector{Int64}
-    WData::Vector{Float64}
-    W₀::Vector{Float64}
-    W_post::Vector{Float64}
-    Pop::Vector{Int64}
-    GDP::Vector{Int64}
-    Pet::Vector{Float64}
-    Post1859::Vector{Float64}
-    PData::Vector{Float64}
-    r_max::Float64
-    z::Float64
-end
 
 function get_aggregate_variables(
     agg_output::DataFrame,
@@ -82,6 +67,6 @@ function get_aggregate_variables(
     println("typeof(r_max) = ", typeof(r_max))
     println("typeof(z) = ", typeof(z))
     
-    return AggregateVariables(QData, KData, NData, WData, W₀, W_post, Pop, GDP, Pet, Post1859, PData, r_max, z)
+    return AggregateVariables(QData, KData, NData, WData, W₀, W_post, Pop, GDP, Pet, Post1859, PData, r_max, z, WMin)
 
 end

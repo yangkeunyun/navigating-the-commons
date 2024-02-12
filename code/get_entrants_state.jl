@@ -1,6 +1,5 @@
 
 
-
 function get_entrants_state(
     df::DataFrame,
     x::DataFrame,

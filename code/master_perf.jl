@@ -32,7 +32,8 @@ m = M.DG_model(;  β=[],                                       # production func
                 scale_Q=100, scale_P=1000,                  # scaling to avoid explosion in exponentials...
                 N̄=400,                                      # maxmimum number of incumbents that the industry can accomodate
                 nboot=100,                                  # ignore for now...
-                state_space="KΩ")                           # state space is consisted of capacity and productivity
+                state_space="KΩ"                           # state space is consisted of capacity and productivity
+                )
 
 d = M.DG_data(; t0=1804, t1=1920,                             # initial year and last year
                 game_start=1858, game_end=1920,             # need to be fixed... for now, they are anyway defined in the later part of the code
@@ -143,7 +144,14 @@ K_space = K_df.K
 
 #========================================================================================#
 
-# @time M.solve_NOE(d, m)
+
+
+# This is the main function to estimate the model. This takes a long time to run.
+# @time nfxp_golden_age = M.optimize_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, x, production_parameters, demand_parameters_pre, demand_parameters_post, df, Nᵖᵉ, n_max, K_space, Is, Xs, Π_ent, Xs_Π, Is_Π, Js_Π)
+
+
+#========================================================================================#
+# Inside optimize_log_likelihood:
 
 @unpack QData, KData, NData, WData, W₀, W_post, Pop, GDP, Pet, Post1859, PData, r_max, z = agg_variables
 K = x.K
@@ -152,6 +160,41 @@ if "A" ∈ names(x)
     A = x.A
 end
 
+
+if m.scale_est == "No"
+    θ₀ = reduce(vcat,[κ,ϕᶠ,Γ]) # Initial guess of θ=θ₀
+    optimum = optimize(obj_func, 
+                        θ₀, 
+                        NelderMead(),
+                        Optim.Options(outer_iterations = 1500,iterations=10000)) #Fminbox(NelderMead()) NelderMead() SimulatedAnnealing()
+else # estimate logit scale parameter
+    θ₀ = reduce(vcat,[m.ψ,m.κ,m.ϕᶠ,m.Γ]) # Initial guess of θ=θ₀
+    if m.cost_struct == 1
+        lower = [0.2,-Inf, -Inf, -Inf, 0.0,  -Inf, 0.0]
+        upper = [5.0, Inf,  Inf, Inf, 10.0,  Inf, 10.0]
+    elseif m.cost_struct == 4
+        lower = [0.2,-Inf, -Inf, -Inf, -Inf]
+        upper = [5.0, Inf,  Inf,  Inf,  Inf]
+    elseif m.cost_struct == 11
+        lower = [0.2,-Inf, -Inf, -Inf, -Inf,  0.0, -Inf, -Inf,  0.0]
+        upper = [5.0, Inf,  Inf,  Inf,  Inf, 10.0,  Inf,  Inf, 10.0]
+    elseif m.cost_struct == 14 
+        lower = [0.2,-Inf, -Inf, 0,  -Inf, -Inf]
+        upper = [5.0, Inf,  Inf, 10.0,  Inf,  Inf]
+    elseif m.cost_struct == 15
+        lower = [0.2,-Inf, -Inf, -Inf, -Inf, -Inf]
+        upper = [5.0, Inf,  Inf,  Inf,  Inf,  Inf]
+    elseif m.cost_struct == 16
+        lower = [0.2,-Inf, -Inf,  0.0, -Inf, -Inf, -Inf, -Inf]
+        upper = [5.0, Inf,  Inf, 10.0,  Inf,  Inf,  Inf,  Inf]
+    end
+end
+
+#========================================================================================#
+# Inside obj_func:
+
+θ = θ₀ # First, set the initial guess of θ=θ₀
+
 if m.scale_est == "No"
     m.κ = θ[1]; m.ϕᶠ = θ[2]; m.Γ = θ[3:end]
 else
@@ -159,63 +202,11 @@ else
 end
 
 
-θ₀ = reduce(vcat,[κ,ϕᶠ,Γ])
-@time M.obj_func(θ₀)
+# Main function to benchmark. always benchmark with 4 threads.
+M.calc_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, K, production_parameters, x, demand_parameters_pre, demand_parameters_post, df, n_max, K_space, Is, Xs, Π_ent, Xs_Π, Is_Π, Js_Π) #Precompilation
 
-pll = @time M.calc_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, K, production_parameters, x, demand_parameters_pre, demand_parameters_post, df, n_max, K_space, Is, Xs, Π_ent, Xs_Π, Is_Π, Js_Π)
-
-
-# @time M.calc_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, K, production_parameters, x, demand_parameters_pre, demand_parameters_post, df, n_max, K_space, Is, Xs, Π_ent, Xs_Π, Is_Π, Js_Π)
+@time M.calc_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, K, production_parameters, x, demand_parameters_pre, demand_parameters_post, df, n_max, K_space, Is, Xs, Π_ent, Xs_Π, Is_Π, Js_Π)
 
 
-
-
-
-@time nfxp_golden_age = M.optimize_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, x, production_parameters, demand_parameters_pre, demand_parameters_post, df, Nᵖᵉ, n_max, K_space, Is, Xs, Π_ent, Xs_Π, Is_Π, Js_Π)
-
-
-
-
-
-# #========================================================================================#
-# # within while loop
-# #========================================================================================#
-# λVec0 = ones(eltype(m.κ),Tbar + 1,m.K_size); λVec0[end] = 0            
-# #d.ιMat0 = ones(Tbar+1,m.x_size,5)
-# ιMat0 = ones(eltype(m.κ),Tbar+1,m.x_size,m.K_size)
-# χMat0 = ones(eltype(m.κ),Tbar+1,m.x_size)
-# λVec1 = ones(eltype(m.κ),Tbar+1,m.K_size); λVec1[end] = 0
-# #d.ιMat1 = ones(Tbar+1,m.x_size,5)
-# ιMat1 = ones(eltype(m.κ),Tbar+1,m.x_size,m.K_size)
-# χMat1 = ones(eltype(m.κ),Tbar+1,m.x_size)
-
-# # Initial matrices (period-by-state) and vectors (by period)
-# sMat = zeros(eltype(m.κ),Tbar+1,m.x_size)   # industry state, i.e. the number of firms in each possible state
-# PVec = zeros(eltype(m.κ),Tbar+1)            # price vector
-# WVec = zeros(eltype(m.κ),Tbar+1)            # whale population in each period
-# KVec = zeros(eltype(m.κ),Tbar+1)            # aggregate capacity in each period
-# QVec = zeros(eltype(m.κ),Tbar+1)            # aggregate whale catch in each period
-# QᶠVec = zeros(eltype(m.κ),Tbar+1)           # aggregate whale catch outside of US whaling
-# NVec = zeros(eltype(m.κ),Tbar+1)            # aggregate number of incumbents in each period
-# VMat = zeros(eltype(m.κ),Tbar+1,m.x_size)
-# πMat = zeros(eltype(m.κ),Tbar+1,m.x_size)
-# Q = zeros(eltype(m.κ),m.x_size)
-# mc = zeros(eltype(m.κ),m.x_size)
-
-# WVec[[1]] = W₀
-# sMat[1,:] = sMat_data[1,:]
-# NVec[[1]] .= max(sum(sMat[1,:]),1)
-# KVec[[1]] .= sum(K .* sMat[1,:])
-# calc_production!(Q, KVec, WVec, d, 1)
-# QVec[[1]] .= sum(Q.*sMat[1,:])
-# sMat[1:end-1,:] = sMat_data
-# compute_aggregate_state!(NVec, KVec, QVec, QᶠVec, WVec, PVec, sMat, Q, d, m)
-
-# n = 0
-# Δ = 10; Δ₁ = 10; Δ₂ = 10; Δ₃ = 10; 
-
-
-# sMat[1:end-1,:] = sMat_data
-# @time compute_aggregate_state!(NVec, KVec, QVec, QᶠVec, WVec, PVec, sMat, Q, d, m)
-
-# @time compute_backward!(ιMat1, χMat1, λVec1, πMat, VMat, Q, mc, KVec, WVec, PVec, d, m)
+#=
+feb 25:  15.008064 seconds (67.83 M allocations: 35.576 GiB, 28.84% gc time) -> 10.388061 seconds (54.77 M allocations: 32.615 GiB, 16.48% gc time)

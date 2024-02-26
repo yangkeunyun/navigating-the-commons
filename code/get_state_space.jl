@@ -95,6 +95,12 @@ function get_state_space!(
         m.x_size = size(x,1)
     end
 
+    m.social_surplus_stay = zeros(eltype(m.Γ),m.x_size,m.K_size)
+    m.pr_capacity_prime = zeros(m.x_size,m.K_size)
+    m.EVᵐᵃˣ = zeros(eltype(m.Γ),m.x_size)
+    m.Ω_size_collect_tr = collect(1:m.Ω_size)'
+    m.Js_vec = [zeros(Int, m.x_size*m.Ω_size) for _ in 1:m.K_size]
+
     return x, Ω_df, K_df, A_df, ω_trans
     
 end

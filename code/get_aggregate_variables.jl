@@ -53,20 +53,6 @@ function get_aggregate_variables(
 
     r_max = w_param_hat[1]; z = w_param_hat[2]
 
-    println("typeof(QData) = ", typeof(QData))
-    println("typeof(KData) = ", typeof(KData))
-    println("typeof(NData) = ", typeof(NData))
-    println("typeof(WData) = ", typeof(WData))
-    println("typeof(W₀) = ", typeof(W₀))
-    println("typeof(W_post) = ", typeof(W_post))
-    println("typeof(Pop) = ", typeof(Pop))
-    println("typeof(GDP) = ", typeof(GDP))
-    println("typeof(Pet) = ", typeof(Pet))
-    println("typeof(Post1859) = ", typeof(Post1859))
-    println("typeof(PData) = ", typeof(PData))
-    println("typeof(r_max) = ", typeof(r_max))
-    println("typeof(z) = ", typeof(z))
-    
     return AggregateVariables(QData, KData, NData, WData, W₀, W_post, Pop, GDP, Pet, Post1859, PData, r_max, z, WMin)
 
 end

@@ -134,6 +134,14 @@ end
     nboot::Int64
 
     options = DG_options()		# Additional options 
+
+    # Preallocation
+    social_surplus_stay::Matrix{Float64} = zeros(0,0) 
+    pr_capacity_prime::Matrix{Float64} = zeros(0,0)
+    EVᵐᵃˣ::Vector{Float64} = zeros(0)
+    Ω_size_collect_tr::LinearAlgebra.Adjoint{Int64, Vector{Int64}} = zeros(Int, 1)'
+    Js_vec::Vector{Vector{Int64}} = [zeros(Int, 0)]
+
 end     
 
 # Options structure gathering additional model/estimation options

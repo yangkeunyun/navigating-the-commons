@@ -1,21 +1,26 @@
 
-function calc_transition_productivity(capacity_prime, m, Is, Xs)
+function calc_transition_productivity(
+    capacity_prime::Int64,
+    Js::Vector{Int64}, # preallocate
+    m::DG_model,
+    Is::Vector{Int64},
+    Xs::Vector{Float64}
+    )::SparseMatrixCSC{Float64,Int64}
     #capacity_prime = capacity_prime_cond
     #= Compute transition probabilities =#
-    Js = zeros(Int, m.x_size*m.Ω_size)
     if m.state_space == "KAΩ"
-        Threads.@threads for l = 1:m.x_size
-        # for l = 1:m.x_size
+        # Threads.@threads for l = 1:m.x_size
+        for l = 1:m.x_size
             A_ind = unique(A[Is[1+(l-1)*m.Ω_size:l*m.Ω_size]])[1]
             if A_ind == m.A_size 
                 A_ind -= 1 # A_size is absorbing state
             end
-            Js[1+(l-1)*m.Ω_size:l*m.Ω_size] = collect(1:m.Ω_size)' .+ (A_ind .+ 1 .- 1)'*m.Ω_size .+ m.A_size*m.Ω_size*(capacity_prime[l] - 1)
+            Js[1+(l-1)*m.Ω_size:l*m.Ω_size] = m.Ω_size_collect_tr .+ (A_ind .+ 1 .- 1)'*m.Ω_size .+ m.A_size*m.Ω_size*(capacity_prime - 1)
         end
     elseif m.state_space == "KΩ"
-        Threads.@threads for l = 1:m.x_size
-        # for l = 1:m.x_size
-            Js[1+(l-1)*m.Ω_size:l*m.Ω_size] = collect(1:m.Ω_size)' .+ m.Ω_size*(capacity_prime[l] - 1)
+        # Threads.@threads for l = 1:m.x_size
+        for l = 1:m.x_size
+            Js[1+(l-1)*m.Ω_size:l*m.Ω_size] = m.Ω_size_collect_tr .+ m.Ω_size*(capacity_prime - 1)
         end    
     end
     Π_Ω = sparse(Is, Js, Xs, m.x_size,m.x_size) # the model is solved using policy iteration with a sparse transition matrix since ∃ (x_size) states
@@ -154,7 +159,10 @@ end
 
 
 #0.000127 seconds (43 allocations: 53.250 KiB)
-function calc_cost(ι, m)
+function calc_cost(
+    ι::Array{Float64},
+    m::DG_model
+    )::Array{Float64}
     #ι = invest_cond
     cost = zeros(eltype(m.Γ),m.x_size)
     if m.cost_struct == 1
@@ -202,9 +210,12 @@ function calc_cost(ι, m)
     elseif m.cost_struct == 15
         cost[vec(ι) .> 0] = m.Γ[1]*ι[ι .> 0]
         cost[vec(ι) .< 0] = m.Γ[2]*K[ι .< 0] + m.Γ[3]*(ι[ι .< 0]).^2
-    elseif m.cost_struct == 16
+    
+    ####focus on 16 for now####
+    elseif m.cost_struct == 16 
         cost[vec(ι) .> 0] = m.Γ[1]*(ι[ι .> 0]).^2 + m.Γ[2]*ι[ι .> 0] .+ m.Γ[4]
         cost[vec(ι) .< 0] = m.Γ[1]*(ι[ι .< 0]).^2 + m.Γ[3]*ι[ι .< 0] .+ m.Γ[5]
+    
     elseif m.cost_struct == 17
         cost[vec(ι) .> 0] = m.Γ[1]*(ι[ι .> 0]).^2 + m.Γ[2]*ι[ι .> 0] + m.Γ[4]./K[ι .> 0]
         cost[vec(ι) .< 0] = m.Γ[1]*(ι[ι .< 0]).^2 + m.Γ[3]*ι[ι .< 0] + m.Γ[4]./K[ι .< 0]
@@ -310,14 +321,6 @@ end
 
 
 # 0.002739 seconds (26.27 k allocations: 14.199 MiB)
-# function get_EV_CCP_inc(
-#     period_profit::Array{Float64, 1},
-#     V::Array{Float64, 2},
-#     m::DG_model,
-#     K_space::Vector{Float64},
-#     K::Vector{Float64},
-#     )::Tuple{Array{Float64, 2}, Array{Float64, 2}, Array{Float64, 2}
-#     }
 function get_EV_CCP_inc(
     period_profit::Vector{Float64},
     V::Vector{Float64},
@@ -326,49 +329,44 @@ function get_EV_CCP_inc(
     K::Vector{Float64},
     Is::Vector{Int64},
     Xs::Vector{Float64}
-    )::Tuple{Vector{Float64}, Vector{Float64}, Vector{Float64}}
+    )::Tuple{Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}
     #V = VMat[t+1,:] # for test
     #period_profit = πMat[t,:]
     # println(typeof.([period_profit, V, m, K_space, K, Is, Xs]))
     # throw(ArgumentError("stop"))
 
-    soical_surplus_stay = zeros(eltype(m.Γ),m.x_size,m.K_size)
-    pr_capacity_prime = zeros(m.x_size,m.K_size)
-    EVᵐᵃˣ = zeros(eltype(m.Γ),m.x_size)
+    # TODO: everything inside this should be big pre-allocated matrices. start with cost as it's the most egregious.
     Threads.@threads for j = 1:m.K_size 
-    # for j = 1:m.K_size 
-        capacity_prime_cond = j*ones(Int,m.x_size)
-        invest_cond = K_space[capacity_prime_cond] - (1-m.δ)*K
+        # capacity_prime_cond = j*ones(Int,m.x_size)
+        invest_cond = K_space[j] .- (1-m.δ)*K
         cost = calc_cost(invest_cond, m)
-        Π_cond = calc_transition_productivity(capacity_prime_cond,m,Is,Xs)
-        soical_surplus_stay[:,j] = -(cost)/(m.scale_P*m.scale_Q) + m.ρ*Π_cond*V 
+        Π_cond = calc_transition_productivity(j, m.Js_vec[j], m, Is, Xs)
+        m.social_surplus_stay[:,j] .= -(cost)/(m.scale_P*m.scale_Q) + m.ρ*Π_cond*V 
     end
 
-    EVᵐᵃˣ = maximum((soical_surplus_stay)/m.ψ, dims=2)
-    Υ = exp.(((m.ϕᶠ .- calc_cost_ext(- (1-m.δ)*K, m))/(m.scale_P*m.scale_Q))/m.ψ .- EVᵐᵃˣ) .+ sum(exp.(((soical_surplus_stay))/m.ψ .- EVᵐᵃˣ), dims=2)
-    social_surplus = period_profit + m.ψ*(0.5772156649 .+ EVᵐᵃˣ + log.(Υ)) # Euler's constant ≃ 0.5772156649
-    pr_capacity_prime = exp.(((soical_surplus_stay))/m.ψ .- EVᵐᵃˣ)./Υ 
-    pr_exit = exp.(((m.ϕᶠ .- calc_cost_ext(- (1-m.δ)*K, m))/(m.scale_P*m.scale_Q))/m.ψ .- EVᵐᵃˣ)./Υ 
+    m.EVᵐᵃˣ .= maximum((m.social_surplus_stay)/m.ψ, dims=2)
+    Υ = exp.(((m.ϕᶠ .- calc_cost_ext(- (1-m.δ)*K, m))/(m.scale_P*m.scale_Q))/m.ψ .- m.EVᵐᵃˣ) .+ sum(exp.(((m.social_surplus_stay))/m.ψ .- m.EVᵐᵃˣ), dims=2)
+    social_surplus = period_profit + m.ψ*(0.5772156649 .+ m.EVᵐᵃˣ + log.(Υ)) # Euler's constant ≃ 0.5772156649
+    m.pr_capacity_prime .= exp.(((m.social_surplus_stay))/m.ψ .- m.EVᵐᵃˣ)./Υ 
+    pr_exit = exp.(((m.ϕᶠ .- calc_cost_ext(- (1-m.δ)*K, m))/(m.scale_P*m.scale_Q))/m.ψ .- m.EVᵐᵃˣ)./Υ 
 
-    return social_surplus, pr_capacity_prime, pr_exit
+    return social_surplus, m.pr_capacity_prime, pr_exit
 end
 
 # 0.000508 seconds (666 allocations: 26.969 KiB)
 function get_CCP_ent(V, m, K_space, Π_ent)
     #V = VMat[t+1,:] # for test
-    soical_surplus_ent = zeros(eltype(m.Γ),1,m.K_size)
-    pr_capacity_prime = zeros(1,m.K_size)
-    EVᵐᵃˣ = zeros(eltype(m.Γ),m.x_size)
+    social_surplus_ent = zeros(eltype(m.Γ),1,m.K_size)
+
     Threads.@threads for j = 1:m.K_size 
-    # for j = 1:m.K_size 
         invest_cond = K_space[j]
         cost = calc_cost_ent(invest_cond, m)
-        soical_surplus_ent[:,j] .= -(cost)/(m.scale_P*m.scale_Q) + m.ρ*Π_ent'*V[1+(j-1)*m.Ω_size:j*m.Ω_size] - (m.κ/(m.scale_P*m.scale_Q))
+        social_surplus_ent[:,j] .= -(cost)/(m.scale_P*m.scale_Q) + m.ρ*Π_ent'*V[1+(j-1)*m.Ω_size:j*m.Ω_size] - (m.κ/(m.scale_P*m.scale_Q))
     end
 
-    EVᵐᵃˣ = maximum((soical_surplus_ent)/m.ψ, dims=2)
-    Υ = exp.((0.0/(m.scale_P*m.scale_Q))/m.ψ .- EVᵐᵃˣ) .+ sum(exp.(((soical_surplus_ent))/m.ψ  .- EVᵐᵃˣ), dims=2)
-    pr_entry = exp.(((soical_surplus_ent))/m.ψ .- EVᵐᵃˣ)./Υ 
+    EVᵐᵃˣ = maximum((social_surplus_ent)/m.ψ, dims=2)
+    Υ = exp.((0.0/(m.scale_P*m.scale_Q))/m.ψ .- EVᵐᵃˣ) .+ sum(exp.(((social_surplus_ent))/m.ψ  .- EVᵐᵃˣ), dims=2)
+    pr_entry = exp.(((social_surplus_ent))/m.ψ .- EVᵐᵃˣ)./Υ 
     
     return pr_entry
 end

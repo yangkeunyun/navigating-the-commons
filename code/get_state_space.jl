@@ -100,6 +100,8 @@ function get_state_space!(
     m.EVᵐᵃˣ = zeros(eltype(m.Γ),m.x_size)
     m.Ω_size_collect_tr = collect(1:m.Ω_size)'
     m.Js_vec = [zeros(Int, m.x_size*m.Ω_size) for _ in 1:m.K_size]
+    m.Π_Ω_vec = [sparse(1:m.x_size, 1:m.x_size, 0.) for _ in 1:m.K_size]
+    m.cost_vec = [zeros(m.x_size) for _ in 1:m.K_size]
 
     return x, Ω_df, K_df, A_df, ω_trans
     

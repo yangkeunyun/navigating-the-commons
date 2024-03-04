@@ -208,5 +208,20 @@ M.calc_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decis
 @time M.calc_log_likelihood(timevar, state, decision, timevar_ent, decision_ent, decision_pe_quit, d, m, Tbar, agg_variables, sMat_data, K, production_parameters, x, demand_parameters_pre, demand_parameters_post, df, n_max, K_space, Is, Xs, Π_ent, Xs_Π, Is_Π, Js_Π)
 
 
+#========================================================================================#
+# Inside calc_log_likelihood:
+
+@unpack QData, KData, NData, WData, W₀, W_post, Pop, GDP, Pet, Post1859, PData, r_max, z = agg_variables
+
+@time exit_prob, invest_prob, entry_prob = M.solve_NOE(d, m, Tbar, agg_variables, sMat_data, K,production_parameters, x, demand_parameters_pre, demand_parameters_post, df, n_max, K_space, Is, Xs, Π_ent, Xs_Π, Is_Π, Js_Π)[1:3]
+
+j = 2
+using SparseArrays
+Π_Ω = sparse(Is, m.Js_vec[j], Xs, m.x_size, m.x_size)
+@time Π_cond = M.calc_transition_productivity(m, Is, m.Js_vec[j], Xs,j, Π_Ω)
+
+
 #=
 feb 25:  15.008064 seconds (67.83 M allocations: 35.576 GiB, 28.84% gc time) -> 10.388061 seconds (54.77 M allocations: 32.615 GiB, 16.48% gc time)
+
+=#

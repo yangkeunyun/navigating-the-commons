@@ -1,10 +1,12 @@
 
+# 0.000189 seconds (433 allocations: 279.938 KiB)
 function calc_transition_productivity(
-    capacity_prime::Int64,
-    Js::Vector{Int64}, # preallocate
     m::DG_model,
     Is::Vector{Int64},
-    Xs::Vector{Float64}
+    Js::Vector{Int64}, # preallocated
+    Xs::Vector{Float64},
+    capacity_prime::Int64,
+    Π_Ω::SparseMatrixCSC{Float64,Int64} # preallocated
     )::SparseMatrixCSC{Float64,Int64}
     #capacity_prime = capacity_prime_cond
     #= Compute transition probabilities =#
@@ -23,7 +25,14 @@ function calc_transition_productivity(
             Js[1+(l-1)*m.Ω_size:l*m.Ω_size] = m.Ω_size_collect_tr .+ m.Ω_size*(capacity_prime - 1)
         end    
     end
-    Π_Ω = sparse(Is, Js, Xs, m.x_size,m.x_size) # the model is solved using policy iteration with a sparse transition matrix since ∃ (x_size) states
+    # Π_Ω = sparse(Is, Js, Xs, m.x_size,m.x_size) # the model is solved using policy iteration with a sparse transition matrix since ∃ (x_size) states
+
+    Π_Ω.nzval .= 0
+    for k in 1:length(Xs)
+        Π_Ω[Is[k], Js[k]] = Xs[k]
+    end
+    dropzeros!(Π_Ω)
+    
     return Π_Ω
 end
 
@@ -159,12 +168,13 @@ end
 
 
 #0.000127 seconds (43 allocations: 53.250 KiB)
-function calc_cost(
+function calc_cost!(
     ι::Array{Float64},
-    m::DG_model
-    )::Array{Float64}
+    m::DG_model,
+    j::Int64
+    )::Nothing
     #ι = invest_cond
-    cost = zeros(eltype(m.Γ),m.x_size)
+    cost = m.cost_vec[j]
     if m.cost_struct == 1
         cost[vec(ι) .> 0] = (m.Γ[1]*ι[ι .> 0] + m.Γ[2].*(ι[ι .> 0]).^2 )
         cost[vec(ι) .< 0] = (m.Γ[3]*ι[ι .< 0] + m.Γ[4].*(ι[ι .< 0]).^2 )
@@ -220,7 +230,7 @@ function calc_cost(
         cost[vec(ι) .> 0] = m.Γ[1]*(ι[ι .> 0]).^2 + m.Γ[2]*ι[ι .> 0] + m.Γ[4]./K[ι .> 0]
         cost[vec(ι) .< 0] = m.Γ[1]*(ι[ι .< 0]).^2 + m.Γ[3]*ι[ι .< 0] + m.Γ[4]./K[ι .< 0]
     end
-    return cost
+    return nothing
 end
 
 # 0.000112 seconds (18 allocations: 32.797 KiB)
@@ -306,11 +316,10 @@ function calc_cost_ent(ι, m)
 end
 
         
-function compute_distribution!(sMat, ιMat1, λVec1, d, m, Xs_Π, Is_Π, Js_Π, Π_ent)
-    Π = spzeros(eltype(m.Γ),m.x_size, m.x_size)
+function compute_distribution!(sMat, ιMat1, λVec1, d, m, Xs_Π, Is_Π, Js_Π, Π_ent, Π_prealloc)
     for t = (d.game_start - d.t0 + 1):(d.game_end - d.t0 + 6)
-        calc_transition_matrix!(Π, ιMat1,m,t, Xs_Π, Is_Π, Js_Π)
-        sMat[t+1,:] .= Π'sMat[t,:]
+        calc_transition_matrix!(Π_prealloc, ιMat1,m,t, Xs_Π, Is_Π, Js_Π)
+        sMat[t+1,:] .= Π_prealloc'sMat[t,:]
         Nᵖᵉ = max.(m.N̄ - sum(sMat[t,:]),0)
         tmp_ent = repeat(λVec1[t,:], inner=m.Ω_size)
         tmp_pro = repeat(Π_ent, outer=m.K_size)
@@ -335,13 +344,12 @@ function get_EV_CCP_inc(
     # println(typeof.([period_profit, V, m, K_space, K, Is, Xs]))
     # throw(ArgumentError("stop"))
 
-    # TODO: everything inside this should be big pre-allocated matrices. start with cost as it's the most egregious.
     Threads.@threads for j = 1:m.K_size 
         # capacity_prime_cond = j*ones(Int,m.x_size)
         invest_cond = K_space[j] .- (1-m.δ)*K
-        cost = calc_cost(invest_cond, m)
-        Π_cond = calc_transition_productivity(j, m.Js_vec[j], m, Is, Xs)
-        m.social_surplus_stay[:,j] .= -(cost)/(m.scale_P*m.scale_Q) + m.ρ*Π_cond*V 
+        calc_cost!(invest_cond, m, j)
+        Π_cond = calc_transition_productivity(m, Is, m.Js_vec[j], Xs, j, m.Π_Ω_vec[j])
+        m.social_surplus_stay[:,j] .= -(m.cost_vec[j])/(m.scale_P*m.scale_Q) + m.ρ*Π_cond*V 
     end
 
     m.EVᵐᵃˣ .= maximum((m.social_surplus_stay)/m.ψ, dims=2)
@@ -494,6 +502,8 @@ function solve_NOE(
 
     n = 0
     Δ = 10; Δ₁ = 10; Δ₂ = 10; Δ₃ = 10; 
+
+    Π_prealloc = spzeros(eltype(m.Γ),m.x_size, m.x_size)
     
     while ((Δ₁ > m.options.ϵ₁ || Δ₂ > m.options.ϵ₁ || Δ₃ > m.options.ϵ₁) && n ≤ n_max)
         n += 1
@@ -501,7 +511,7 @@ function solve_NOE(
             sMat[1:end-1,:] = sMat_data
             compute_aggregate_state!(NVec, KVec, QVec, QᶠVec, WVec, PVec, sMat, Q, d, m, production_parameters, agg_variables, demand_parameters_pre, demand_parameters_post, x, df)
         else 
-            compute_distribution!(sMat, ιMat1, λVec1, d, m, Xs_Π, Is_Π, Js_Π, Π_ent)
+            compute_distribution!(sMat, ιMat1, λVec1, d, m, Xs_Π, Is_Π, Js_Π, Π_ent, Π_prealloc)
             compute_aggregate_state!(NVec, KVec, QVec, QᶠVec, WVec, PVec, sMat, Q, d, m, production_parameters, agg_variables, demand_parameters_pre, demand_parameters_post, x, df)
         end
 

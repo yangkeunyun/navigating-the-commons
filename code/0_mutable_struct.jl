@@ -141,6 +141,9 @@ end
     EVᵐᵃˣ::Vector{Float64} = zeros(0)
     Ω_size_collect_tr::LinearAlgebra.Adjoint{Int64, Vector{Int64}} = zeros(Int, 1)'
     Js_vec::Vector{Vector{Int64}} = [zeros(Int, 0)]
+    Π_Ω_vec::Vector{SparseMatrixCSC{Float64,Int64}} = [sparse([1], [1], [0.])]
+    cost_vec::Vector{Vector{Float64}} = [zeros(0)]
+
 
 end     
 
